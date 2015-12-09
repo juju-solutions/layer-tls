@@ -1,4 +1,6 @@
 import os
+import socket
+import tmpfile
 
 from shlex import split
 from subprocess import check_call
@@ -57,18 +59,42 @@ def leader_settings_changed():
 
 @when('create certificate signing request')
 def create_csr(tls):
+    ''' todo '''
     if not is_leader():
-        csr = create_csr()
+        unit_name = hookenv.local_unit().replace('/', '_')
+        gen_req = './easyrsa --batch --req-cn={0} gen-req {1} nopass'.format(unit_name)
+        check_call(split(gen_req))
+        req_file = 'pki/reqs/{0}.req'.format(unit_name)
+        with open(req_file, 'r') as fp;
+            csr = fp.read()
+        print(csr)
         tls.set_csr(csr)
 
 @when('sign certificate signing request')
 def import_sign(tls):
+    ''' todo '''
     if is_leader():
+        # Get all the requests that are queued up to sign.
         csr_map = tls.get_csr_map()
-        for name, csr in csr_map.items():
-            # easy-rsa import-req /tmp/temporary.csr name
-            # certificate = easy-rsa sign-req server name
-            tls.set_cert(name, certifcate)
+        # Iterate over the unit names.
+        for unit_name, csr in csr_map.items():
+            with chdir('easy-rsa/easyrsa3'):
+                temp_file = tempfile.NamedTemporaryFile(suffix='.csr')
+                with open(temp_file.name, 'w') as fp:
+                    fp.write(csr)
+                # Create the command that imports the request use unit name.
+                import_req = './easyrsa --batch import-req {0} {1}'
+                # easy-rsa import-req /tmp/temporary.csr name
+                check_call(split(import_req.format(temp_file.name, unit_name)))
+                # Create a command that signs the request.
+                sign_req = './easyrsa --batch sign-req server {0}'
+                check_call(split(sign_req.format(unit_name)))
+                # Read in the signed certificate.
+                cert_file = 'issued/{0}'.format(unit_name)
+                with open(cert_file, 'r') as fp:
+                    certificate = fp.read()
+                # Send the certificate over the relation.
+                tls.set_cert(name, certifcate)
 
 
 @when('signed certificate available')
@@ -84,7 +110,7 @@ def create_ca(common_name=None):
     '''Create a self signed certificate of authority for this system.'''
     with chdir('easy-rsa/easyrsa3')
         # Initialize easy-rsa (by deleting old pki) so you can create a new cert.
-        init = 'echo yes | ./easyrsa init-pki --batch 2>&1'
+        init = 'echo yes | ./easyrsa --batch init-pki 2>&1'
         check_call(split(init))
         # Create the Certificate Authority, select a name called the Common Name (CN).
         if not common_name:
@@ -92,6 +118,11 @@ def create_ca(common_name=None):
         # This name is purely for display purposes and can be set as you like.
         build_ca = './easyrsa --batch "--req-cn=${0}" build-ca nopass 2>&1'
         check_call(split(build_ca.format(common_name)))
+        alt_names="IP:{0},IP:{1},DNS:{2}".format(hookenv.unit_public_ip(),
+        hookenv.unit_private_ip(), socket.gethostname())
+        server = './easyrsa --batch --subject-alt-name={0} build-server-full server nopass 2>&1'
+        check_call(split(server.format(alt_names)))
+
 
 
 @contextmanager
