@@ -1,0 +1,7 @@
+options:
+  root_certificate:
+    type: string
+    default: ""
+    description: |
+        The root Certificate to use for this grouping of charms.
+        If empty the leader will generate a self signed CA.

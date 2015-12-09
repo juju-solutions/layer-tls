@@ -1,0 +1,12 @@
+name: tls
+summary: A layer that uses Transport Layer Security (TLS) to create secure communication. 
+maintainers:
+    - Matthew Bruzek <matthew.bruzek@ubuntu.com>
+description: |
+  Creates a CA certificate and install it on the peers of this charm.
+tags:
+  - infrastructure
+subordinate: false
+peers:
+   tls:
+     interface: certificates 
