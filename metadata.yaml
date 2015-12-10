@@ -8,5 +8,5 @@ tags:
   - infrastructure
 subordinate: false
 peers:
-   tls:
-     interface: certificates 
+   certificates:
+     interface: tls 
