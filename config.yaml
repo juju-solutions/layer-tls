@@ -3,5 +3,6 @@ options:
     type: string
     default: ""
     description: |
-        The root Certificate to use for this grouping of charms.
-        If empty the leader will generate a self signed CA.
+        The root certificate to use for this grouping of charms.
+        If empty (default) the leader will generate a self signed Certificate
+        Authority (CA). All certificates will be based on the root certificate.
