@@ -42,6 +42,7 @@ def config_changed():
     if config.changed('root_certificate'):
         root_cert = config.get('root_certificate')
         if is_leader():
+            hookenv.log('Creating the certificates.')
             root_cert = create_certificates(root_cert)
             hookenv.log('The leader is setting certificate_authority.')
             leader_set({'certificate_authority': root_cert})
@@ -54,6 +55,7 @@ def leader_settings_changed():
     # Get the current CA value from leader_get.
     ca = leader_get('certificate_authority')
     if ca:
+        hookenv.log('Installing the CA.')
         install_ca(ca)
 
 
@@ -61,15 +63,15 @@ def leader_settings_changed():
 def create_csr(tls):
     '''Create a certificate signing request (CSR). Only the followers need to
     run this operation.'''
-    hookenv.log('Creating the CSR.')
     if not is_leader():
-        unit_name = hookenv.local_unit().replace('/', '_')
+        unit_name = _path_safe_name(hookenv.local_unit())
         # Create list of the subject alternate names (SANs).
         sans = 'IP:{0},IP:{1},DNS:{2}'.format(unit_public_ip(),
                                               unit_private_ip(),
                                               socket.gethostname())
         # The Common Name is the public address of the system.
         cn = unit_public_ip()
+        hookenv.log('Creating the CSR for {0}'.format(cn))
         with chdir('easy-rsa/easyrsa3'):
             # Create a CSR for this system with the subject and SANs.
             gen_req = './easyrsa --batch --req-cn={0} --subject-alt-name={1} ' \
@@ -81,6 +83,8 @@ def create_csr(tls):
                 csr = fp.read()
             # Set the CSR on the relation object.
             tls.set_csr(csr)
+    else:
+        hookenv.log('The leader does not need to create a CSR.')
 
 
 @when('sign certificate signing request')
@@ -88,25 +92,32 @@ def import_sign(tls):
     '''Import and sign the certificate signing request (CSR). Only the leader
     can sign the requests.'''
     if is_leader():
+        hookenv.log('The leader needs to sign the csr requests.')
         # Get all the requests that are queued up to sign.
         csr_map = tls.get_csr_map()
         # Iterate over the unit names related to CSRs.
         for unit_name, csr in csr_map.items():
+            path_name = _path_safe_name(unit_name)
             with chdir('easy-rsa/easyrsa3'):
                 temp_file = tempfile.NamedTemporaryFile(suffix='.csr')
                 with open(temp_file.name, 'w') as fp:
                     fp.write(csr)
-                # Create the command that imports the request use unit name.
-                import_req = './easyrsa --batch import-req {0} {1} 2>&1'
-                # easy-rsa import-req /tmp/temporary.csr name
-                check_call(split(import_req.format(temp_file.name, unit_name)))
-                # Create a command that signs the request.
-                sign_req = './easyrsa --batch sign-req server {0} 2>&1'
-                check_call(split(sign_req.format(unit_name)))
+                if not os.path.isfile('pki/reqs/{0}.req'.format(path_name)):
+                    hookenv.log('Importing csr from {0}'.format(path_name))
+                    # Create the command that imports the request use unit name.
+                    import_req = './easyrsa --batch import-req {0} {1} 2>&1'
+                    # easy-rsa import-req /tmp/temporary.csr name
+                    check_call(split(import_req.format(temp_file.name, path_name)))
+                if not os.path.isfile('pki/issued/{0}.crt'.format(path_name)):
+                    hookenv.log('Signing csr from {0}'.format(path_name))
+                    # Create a command that signs the request.
+                    sign_req = './easyrsa --batch sign-req server {0} 2>&1'
+                    check_call(split(sign_req.format(path_name)))
                 # Read in the signed certificate.
-                cert_file = 'issued/{0}'.format(unit_name)
+                cert_file = 'pki/issued/{0}.crt'.format(path_name)
                 with open(cert_file, 'r') as fp:
                     certificate = fp.read()
+                hookenv.log('Leader sending signed certificate over relation.')
                 # Send the certificate over the relation.
                 tls.set_cert(unit_name, certificate)
 
@@ -115,8 +126,11 @@ def import_sign(tls):
 def write_cert(tls):
     '''Write the certificate to the key value store of the unit for other
     layers to consume.'''
+    hookenv.log('Get the signed cert from relation.')
     cert = tls.get_signed_cert()
-    unitdata.kv().set('tls.server.certificate', cert)
+    if cert:
+        unitdata.kv().set('tls.server.certificate', cert)
+        remove_state('signed certificate available')
     # Set the state for other layers to know when they can get the server cert.
     set_state('tls.server.certificate.available')
 
@@ -156,6 +170,11 @@ def install_ca(certificate_authority):
         fp.write(certificate_authority)
     # Update the trusted CAs on this system.
     check_call(['update-ca-certificates 2>&1'])
+
+
+def _path_safe_name(unit_name):
+    '''Remove the special characters in a unit name (eg. tls/1 -> tls_1)'''
+    return unit_name.replace('/', '_')
 
 
 @contextmanager
