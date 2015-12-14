@@ -39,14 +39,15 @@ def config_changed():
     '''Called when the configuration values have changed.'''
     config = hookenv.config()
     if config.changed('root_certificate'):
-        root_cert = config.get('root_certificate')
         if is_leader():
-            hookenv.log('Creating the certificates.')
-            root_cert = create_certificates(root_cert)
-            # The leader created its own signed certificate.
-            set_state('signed certificate available')
-            hookenv.log('The leader is setting certificate_authority.')
-            leader_set({'certificate_authority': root_cert})
+            root_cert = config.get('root_certificate')
+            hookenv.log('Leader is creating the certificate authority.')
+            certificate_authority = create_certificate_authority(root_cert)
+            leader_set({'certificate_authority': certificate_authority})
+            install_ca(certificate_authority)
+            # The leader can create the server certificate based on CA.
+            hookenv.log('Leader is creating server certificate.')
+            create_server_certificate()
 
 
 @hook('leader-settings-changed')
@@ -124,7 +125,7 @@ def import_sign(tls):
 
 @when('signed certificate available')
 @when_not('server certificate available')
-def server_cert(tls):
+def copy_server_cert(tls):
     '''Copy the certificate to the key value store of the unit for other
     layers to consume.'''
     if is_leader():
@@ -146,39 +147,45 @@ def server_cert(tls):
         set_state('server certificate available')
 
 
-def create_certificates(certificate_authority=None):
+def create_certificate_authority(certificate_authority=None):
     '''Return the CA and server certificates for this system. If the CA is
     empty, generate a self signged certificate authority.'''
     with chdir('easy-rsa/easyrsa3'):
-        if not os.path.exists('pki/ca.crt'):
-            # Initialize easy-rsa (by deleting old pki) so a new ca can be created.
+        ca_file = 'pki/ca.crt'
+        # Check if an old CA exists.
+        if os.path.isfile(ca_file):
+            # Initialize easy-rsa (by deleting old pki) so a new CA can be created.
             init = 'echo yes | ./easyrsa init-pki 2>&1'
             check_call(split(init))
-            # Idempotency guard for the CA certificate. DO not regenerate if it
-            # exists on disk. Assume we want to read and return this
-        if os.path.exists('pki/ca.crt'):
-            with open('pki/ca.crt', 'r') as fp:
-                certificate_authority = fp.read()
-        # The Common Name for a certificate must be an IP or hostname.
-        cn = hookenv.unit_public_ip()
-        if not certificate_authority:
-            # Create a CA with the a common name, stored in pki/ca.crt
+        # When the CA is not null write the CA file..
+        if certificate_authority:
+            # Write the certificate authority from configuration.
+            with open(ca_file, 'w') as fp:
+                fp.write(certificate_authority)
+        else:
+            # The Certificate Authority does not exist, build a self signed one.
+            # The Common Name (CN) for a certificate must be an IP or hostname.
+            cn = hookenv.unit_public_ip()
+            # Create a self signed CA with the CN, stored pki/ca.crt
             build_ca = './easyrsa --batch "--req-cn={0}" build-ca nopass 2>&1'
             check_call(split(build_ca.format(cn)))
             # Read the CA so we can return the contents from this method.
-            with open('pki/ca.crt', 'r') as fp:
+            with open(ca_file, 'r') as fp:
                 certificate_authority = fp.read()
-        else:
-            # write the CA that was passed in.
-            with open('pki/ca.crt', 'w') as fp:
-                fp.write(certificate_authority)
-        # Do not regenerate the server certificate if it exists
-        if not os.path.exists('pki/issued/{}.crt'.format(cn)):
-            # Create a server certificate for the server based on the CA.
+    return certificate_authority
+
+
+def create_server_certificate():
+    '''Create the server certificate.'''
+    # Use the public ip as the Common Name for the server certificate.
+    cn = hookenv.unit_public_ip()
+    with chdir('easy-rsa/easyrsa3'):
+        # Do not regenerate the server certificate if it already exists.
+        if not os.path.exists('pki/issued/{0}.crt'.format(cn)):
+            # Create a server certificate for the server based on the CN.
             server = './easyrsa --batch --req-cn={0} --subject-alt-name={1} ' \
                      'build-server-full {0} nopass 2>&1'.format(cn, get_sans())
             check_call(split(server))
-        return certificate_authority
 
 
 def install_ca(certificate_authority):
