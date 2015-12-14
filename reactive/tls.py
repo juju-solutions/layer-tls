@@ -172,10 +172,12 @@ def create_certificates(certificate_authority=None):
             # write the CA that was passed in.
             with open('pki/ca.crt', 'w') as fp:
                 fp.write(certificate_authority)
-        # Create a server certificate for the server based on the CA.
-        server = './easyrsa --batch --req-cn={0} --subject-alt-name={1} ' \
-                 'build-server-full {0} nopass 2>&1'.format(cn, get_sans())
-        check_call(split(server))
+        # Do not regenerate the server certificate if it exists
+        if not os.path.exists('pki/issued/{}.crt'.format(cn)):
+            # Create a server certificate for the server based on the CA.
+            server = './easyrsa --batch --req-cn={0} --subject-alt-name={1} ' \
+                     'build-server-full {0} nopass 2>&1'.format(cn, get_sans())
+            check_call(split(server))
         return certificate_authority
 
 
