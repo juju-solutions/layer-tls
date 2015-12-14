@@ -150,9 +150,15 @@ def create_certificates(certificate_authority=None):
     '''Return the CA and server certificates for this system. If the CA is
     empty, generate a self signged certificate authority.'''
     with chdir('easy-rsa/easyrsa3'):
-        # Initialize easy-rsa (by deleting old pki) so a new ca can be created.
-        init = 'echo yes | ./easyrsa init-pki 2>&1'
-        check_call(split(init))
+        if not os.path.exists('pki/ca.crt'):
+            # Initialize easy-rsa (by deleting old pki) so a new ca can be created.
+            init = 'echo yes | ./easyrsa init-pki 2>&1'
+            check_call(split(init))
+            # Idempotency guard for the CA certificate. DO not regenerate if it
+            # exists on disk. Assume we want to read and return this
+        if os.path.exists('pki/ca.crt'):
+            with open('pki/ca.crt', 'r') as fp:
+                certificate_authority = fp.read()
         # The Common Name for a certificate must be an IP or hostname.
         cn = hookenv.unit_public_ip()
         if not certificate_authority:
