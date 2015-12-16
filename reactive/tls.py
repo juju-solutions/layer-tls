@@ -1,3 +1,4 @@
+import base64
 import os
 import shutil
 import socket
@@ -40,7 +41,7 @@ def config_changed():
     config = hookenv.config()
     if config.changed('root_certificate'):
         if is_leader():
-            root_cert = config.get('root_certificate')
+            root_cert = _decode(config.get('root_certificate'))
             hookenv.log('Leader is creating the certificate authority.')
             certificate_authority = create_certificate_authority(root_cert)
             leader_set({'certificate_authority': certificate_authority})
@@ -126,25 +127,22 @@ def import_sign(tls):
 @when('signed certificate available')
 @when_not('server certificate available')
 def copy_server_cert(tls):
-    '''Copy the certificate to the key value store of the unit for other
-    layers to consume.'''
-    if is_leader():
-        # The leader signed its own server certificate named public-ip.crt
-        cert_name = '{0}.crt'.format(hookenv.unit_public_ip())
-        # The leader stored the server certificate in pki/issued/ directory.
-        cert_file = 'easy-rsa/easyrsa3/pki/issued/{0}'.format(cert_name)
-        with open(cert_file, 'r') as fp:
-            cert = fp.read()
-    else:
-        # Get the signed certificate from the relation object.
-        cert = tls.get_signed_cert()
+    '''Copy the certificate from the relation to the key value store.'''
+    # Get the signed certificate from the relation object.
+    cert = tls.get_signed_cert()
     if cert:
-        # Set cert on the unitdata key value store so other layers can get it.
-        unitdata.kv().set('tls.server.certificate', cert)
+        set_server_cert(cert)
         remove_state('signed certificate available')
-        # Set the final state for the other layers to know when they can
-        # retrieve the server certificate.
-        set_state('server certificate available')
+
+
+def set_server_cert(server_cert):
+    '''Set the serve certificate on the key value store of the unit, and set
+    the final state for layers to consume.'''
+    # Set cert on the unitdata key value store so other layers can get it.
+    unitdata.kv().set('tls.server.certificate', server_cert)
+    # Set the final state for the other layers to know when they can
+    # retrieve the server certificate.
+    set_state('server certificate available')
 
 
 def create_certificate_authority(certificate_authority=None):
@@ -155,7 +153,7 @@ def create_certificate_authority(certificate_authority=None):
         # Check if an old CA exists.
         if os.path.isfile(ca_file):
             # Initialize easy-rsa (by deleting old pki) so a new CA can be created.
-            init = 'echo yes | ./easyrsa init-pki 2>&1'
+            init = './easyrsa --batch init-pki 2>&1'
             check_call(split(init))
         # When the CA is not null write the CA file..
         if certificate_authority:
@@ -180,12 +178,17 @@ def create_server_certificate():
     # Use the public ip as the Common Name for the server certificate.
     cn = hookenv.unit_public_ip()
     with chdir('easy-rsa/easyrsa3'):
+        server_file = 'pki/issued/{0}.crt'.format(cn)
         # Do not regenerate the server certificate if it already exists.
-        if not os.path.exists('pki/issued/{0}.crt'.format(cn)):
+        if not os.path.isfile(server_file):
             # Create a server certificate for the server based on the CN.
             server = './easyrsa --batch --req-cn={0} --subject-alt-name={1} ' \
                      'build-server-full {0} nopass 2>&1'.format(cn, get_sans())
             check_call(split(server))
+            # Read the server certificate from the filesystem.
+            with open(server_file, 'r') as fp:
+                cert = fp.read()
+            set_server_cert(cert)
 
 
 def install_ca(certificate_authority):
@@ -214,6 +217,15 @@ def get_sans(ip_list=None, dns_list=None):
                                                    hookenv.unit_private_ip(),
                                                    socket.gethostname()))
     return ','.join(sans)
+
+
+def _decode(encoded):
+    '''Base64 decode a string by handing any decoding errors.'''
+    try:
+        return base64.b64decode(encoded)
+    except:
+        hookenv.log('Error decoding string {0}'.format(encoded))
+        raise
 
 
 def _path_safe_name(unit_name):
