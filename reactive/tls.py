@@ -21,7 +21,7 @@ from charmhelpers.core.hookenv import leader_get
 from contextlib import contextmanager
 
 
-@hook('install')
+@when_not('easyrsa installed')
 def install():
     '''Install the easy-rsa software that is required for this layer.'''
     apt = 'apt-get install -y git openssl'
@@ -33,13 +33,15 @@ def install():
     check_call(split(git))
     with chdir('easy-rsa/easyrsa3'):
         check_call(split('./easyrsa --batch init-pki 2>&1'))
+    set_state('easyrsa installed')
 
 
-@hook('config-changed')
-def config_changed():
+@when('easyrsa installed')
+def check_ca_status():
     '''Called when the configuration values have changed.'''
     config = hookenv.config()
     if config.changed('root_certificate'):
+        remove_state('certificate authority available')
         if is_leader():
             root_cert = _decode(config.get('root_certificate'))
             hookenv.log('Leader is creating the certificate authority.')
@@ -145,9 +147,13 @@ def set_server_cert(server_cert):
     set_state('server certificate available')
 
 
+@when_not('certificate authority available')
 def create_certificate_authority(certificate_authority=None):
     '''Return the CA and server certificates for this system. If the CA is
     empty, generate a self signged certificate authority.'''
+    # followers are not special, do not generate a ca
+    if not is_leader():
+        return
     with chdir('easy-rsa/easyrsa3'):
         ca_file = 'pki/ca.crt'
         # Check if an old CA exists.
@@ -170,6 +176,7 @@ def create_certificate_authority(certificate_authority=None):
             # Read the CA so we can return the contents from this method.
             with open(ca_file, 'r') as fp:
                 certificate_authority = fp.read()
+    set_state('certificate authority available')
     return certificate_authority
 
 
