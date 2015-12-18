@@ -148,6 +148,7 @@ def set_server_cert(server_cert):
 
 
 @when_not('certificate authority available')
+@when('easyrsa installed')
 def create_certificate_authority(certificate_authority=None):
     '''Return the CA and server certificates for this system. If the CA is
     empty, generate a self signged certificate authority.'''
