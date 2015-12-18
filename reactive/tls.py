@@ -159,7 +159,7 @@ def create_certificate_authority(certificate_authority=None):
         ca_file = 'pki/ca.crt'
         # Check if an old CA exists.
         if os.path.isfile(ca_file):
-            # Initialize easy-rsa (by deleting old pki) so a new CA can be created.
+            # Initialize easy-rsa (by deleting old pki) so a CA can be created.
             init = './easyrsa --batch init-pki 2>&1'
             check_call(split(init))
         # When the CA is not null write the CA file..
@@ -168,7 +168,7 @@ def create_certificate_authority(certificate_authority=None):
             with open(ca_file, 'w') as fp:
                 fp.write(certificate_authority)
         else:
-            # The Certificate Authority does not exist, build a self signed one.
+            # The Certificate Authority does not exist build a self signed one.
             # The Common Name (CN) for a certificate must be an IP or hostname.
             cn = hookenv.unit_public_ip()
             # Create a self signed CA with the CN, stored pki/ca.crt
@@ -207,7 +207,7 @@ def install_ca(certificate_authority):
     with open(ca_file, 'w') as fp:
         fp.write(certificate_authority)
     # Update the trusted CAs on this system.
-    check_call(split('update-ca-certificates 2>&1'))
+    check_call(['update-ca-certificates'])
 
 
 def get_sans(ip_list=None, dns_list=None):
