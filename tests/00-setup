@@ -11,4 +11,4 @@ if [ $? -ne 0 ]; then
 fi
 
 # Install any additional python packages or software here.
-sudo apt-get install -y openssl
+sudo apt-get install -y openssl python3-yaml
