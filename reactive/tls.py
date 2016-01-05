@@ -50,7 +50,7 @@ def check_ca_status():
             install_ca(certificate_authority)
             # The leader can create the server certificate based on CA.
             hookenv.log('Leader is creating server certificate.')
-            create_server_certificate()
+            create_certificates()
 
 
 @hook('leader-settings-changed')
@@ -181,18 +181,18 @@ def create_certificate_authority(certificate_authority=None):
     return certificate_authority
 
 
-def create_server_certificate():
+def create_certificates():
     '''Create the server certificate.'''
     # Use the public ip as the Common Name for the server certificate.
     cn = hookenv.unit_public_ip()
     with chdir('easy-rsa/easyrsa3'):
-        server_file = 'pki/issued/{0}.crt'.format(cn)
+        server_file = 'pki/issued/server.crt'
         sans = get_sans()
         # Do not regenerate the server certificate if it already exists.
         if not os.path.isfile(server_file):
             # Create a server certificate for the server based on the CN.
             server = './easyrsa --batch --req-cn={0} --subject-alt-name={1} ' \
-                     'build-server-full {0} nopass 2>&1'.format(cn, sans)
+                     'build-server-full server nopass 2>&1'.format(cn, sans)
             check_call(split(server))
             # Read the server certificate from the filesystem.
             with open(server_file, 'r') as fp:
