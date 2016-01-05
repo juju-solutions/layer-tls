@@ -89,6 +89,25 @@ def create_csr(tls):
     else:
         hookenv.log('The leader does not need to create a CSR.')
 
+@when_not('client certificate signed')
+def create_client_csr():
+    '''Create a certificate signing request (CSR) for the client connections.
+    this method is run implicitly on the certificate authority and placed in
+    the units key/value store for retreival by upper charm layers'''
+    if is_leader():
+        cn = 'client'
+        hookenv.log('Creating the CSR for {}'.format(cn))
+        with chdir('easy-rsa/easyrsa3'):
+            sans = get_sans()
+            path_name = "client"
+            gen_req = './easyrsa --batch --req-cn={0} --subject-alt-name={1} ' \
+            'gen-req {2} nopass 2>&1'.format(cn, sans, path_name)
+        check_call(split(gen_req))
+    db = unitdata.kv()
+    with open('easyrsa/easyrsa3/pki/issued/client.crt') as f:
+        client_certificate = f.read()
+    db.set('tls.client.certificate', client_certificate)
+
 
 @when('sign certificate signing request')
 def import_sign(tls):
