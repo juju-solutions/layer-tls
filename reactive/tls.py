@@ -104,7 +104,7 @@ def create_client_csr():
             'gen-req {2} nopass 2>&1'.format(cn, sans, path_name)
         check_call(split(gen_req))
     db = unitdata.kv()
-    with open('easyrsa/easyrsa3/pki/issued/client.crt') as f:
+    with open('easy-rsa/easyrsa3/pki/issued/client.crt') as f:
         client_certificate = f.read()
     db.set('tls.client.certificate', client_certificate)
 
