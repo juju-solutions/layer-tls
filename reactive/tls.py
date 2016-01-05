@@ -133,18 +133,18 @@ def copy_server_cert(tls):
     # Get the signed certificate from the relation object.
     cert = tls.get_signed_cert()
     if cert:
-        set_server_cert(cert)
+        set_cert('tls.server.certificate', cert)
         remove_state('signed certificate available')
 
 
-def set_server_cert(server_cert):
-    '''Set the serve certificate on the key value store of the unit, and set
-    the final state for layers to consume.'''
+def set_cert(key, certificate):
+    '''Set the certificate on the key value store of the unit, and set
+    the corresponding state for layers to consume.'''
     # Set cert on the unitdata key value store so other layers can get it.
-    unitdata.kv().set('tls.server.certificate', server_cert)
+    unitdata.kv().set(key, certificate)
     # Set the final state for the other layers to know when they can
     # retrieve the server certificate.
-    set_state('server certificate available')
+    set_state('{0} available'.format(key))
 
 
 @when_not('certificate authority available')
@@ -187,16 +187,29 @@ def create_server_certificate():
     cn = hookenv.unit_public_ip()
     with chdir('easy-rsa/easyrsa3'):
         server_file = 'pki/issued/{0}.crt'.format(cn)
+        sans = get_sans()
         # Do not regenerate the server certificate if it already exists.
         if not os.path.isfile(server_file):
             # Create a server certificate for the server based on the CN.
             server = './easyrsa --batch --req-cn={0} --subject-alt-name={1} ' \
-                     'build-server-full {0} nopass 2>&1'.format(cn, get_sans())
+                     'build-server-full {0} nopass 2>&1'.format(cn, sans)
             check_call(split(server))
             # Read the server certificate from the filesystem.
             with open(server_file, 'r') as fp:
-                cert = fp.read()
-            set_server_cert(cert)
+                server_cert = fp.read()
+            set_cert('tls.server.certificate', server_cert)
+
+        client_file = 'pki/issued/client.crt'
+        # Do not regenerate the client certificate if it already exists.
+        if not os.path.isfile(client_file):
+            # Create a client certificate and key.
+            client = './easyrsa --batch --req-cn={0} --subject-alt-name={1} ' \
+                     'build-client-full client nopass 2>&1'.format(cn, sans)
+            check_call(split(client))
+            # Read the client certificate from the filesystem.
+            with open(client_file, 'r') as fp:
+                client_cert = fp.read()
+            set_cert('tls.client.certificate', client_cert)
 
 
 def install_ca(certificate_authority):
