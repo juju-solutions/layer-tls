@@ -127,13 +127,14 @@ def import_sign(tls):
 
 
 @when('signed certificate available')
-@when_not('server certificate available')
 def copy_server_cert(tls):
     '''Copy the certificate from the relation to the key value store.'''
     # Get the signed certificate from the relation object.
     cert = tls.get_signed_cert()
     if cert:
+        # The key name is also used to set the reactive state.
         set_cert('tls.server.certificate', cert)
+        # Remove this state so this method does not run all the time.
         remove_state('signed certificate available')
 
 
@@ -147,8 +148,8 @@ def set_cert(key, certificate):
     set_state('{0} available'.format(key))
 
 
-@when_not('certificate authority available')
 @when('easyrsa installed')
+@when_not('certificate authority available')
 def create_certificate_authority(certificate_authority=None):
     '''Return the CA and server certificates for this system. If the CA is
     empty, generate a self signged certificate authority.'''
@@ -162,7 +163,7 @@ def create_certificate_authority(certificate_authority=None):
             # Initialize easy-rsa (by deleting old pki) so a CA can be created.
             init = './easyrsa --batch init-pki 2>&1'
             check_call(split(init))
-        # When the CA is not null write the CA file..
+        # When the CA is not None write the CA file.
         if certificate_authority:
             # Write the certificate authority from configuration.
             with open(ca_file, 'w') as fp:
@@ -197,6 +198,7 @@ def create_certificates():
             # Read the server certificate from the filesystem.
             with open(server_file, 'r') as fp:
                 server_cert = fp.read()
+            # The key name is also used to set the reactive state.
             set_cert('tls.server.certificate', server_cert)
 
         client_file = 'pki/issued/client.crt'
@@ -209,6 +211,7 @@ def create_certificates():
             # Read the client certificate from the filesystem.
             with open(client_file, 'r') as fp:
                 client_cert = fp.read()
+            # The key name is also used to set the reactive state.
             set_cert('tls.client.certificate', client_cert)
 
 
@@ -221,6 +224,8 @@ def install_ca(certificate_authority):
         fp.write(certificate_authority)
     # Update the trusted CAs on this system.
     check_call(['update-ca-certificates'])
+    # Notify other layers that the certificate authority is available.
+    set_state('tls.certificate.authority available')
 
 
 def get_sans(ip_list=None, dns_list=None):
