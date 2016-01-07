@@ -69,12 +69,12 @@ def create_csr(tls):
     '''Create a certificate signing request (CSR). Only the followers need to
     run this operation.'''
     if not is_leader():
-        # Must remove the path characters from the unit name.
-        path_name = _path_safe_name(hookenv.local_unit())
-        # The Common Name is the public address of the system.
-        cn = hookenv.unit_public_ip()
-        hookenv.log('Creating the CSR for {0}'.format(cn))
         with chdir('easy-rsa/easyrsa3'):
+            # Must remove the path characters from the unit name.
+            path_name = hookenv.local_unit().replace('/', '_')
+            # The Common Name is the public address of the system.
+            cn = hookenv.unit_public_ip()
+            hookenv.log('Creating the CSR for {0}'.format(path_name))
             sans = get_sans()
             # Create a CSR for this system with the subject and SANs.
             gen_req = './easyrsa --batch --req-cn={0} --subject-alt-name={1} ' \
@@ -100,11 +100,12 @@ def import_sign(tls):
         csr_map = tls.get_csr_map()
         # Iterate over the unit names related to CSRs.
         for unit_name, csr in csr_map.items():
-            path_name = _path_safe_name(unit_name)
             with chdir('easy-rsa/easyrsa3'):
                 temp_file = tempfile.NamedTemporaryFile(suffix='.csr')
                 with open(temp_file.name, 'w') as fp:
                     fp.write(csr)
+                # Must remove the path characters from the unit name.
+                path_name = hookenv.local_unit().replace('/', '_')
                 if not os.path.isfile('pki/reqs/{0}.req'.format(path_name)):
                     hookenv.log('Importing csr from {0}'.format(path_name))
                     # Create the command to import the request using path name.
@@ -187,13 +188,16 @@ def create_certificates():
     # Use the public ip as the Common Name for the server certificate.
     cn = hookenv.unit_public_ip()
     with chdir('easy-rsa/easyrsa3'):
-        server_file = 'pki/issued/server.crt'
+        # Must remove the path characters from the unit name tls/0 -> tls_0.
+        path_name = hookenv.local_unit().replace('/', '_')
+        server_file = 'pki/issued/{0}.crt'.format(path_name)
         sans = get_sans()
         # Do not regenerate the server certificate if it already exists.
         if not os.path.isfile(server_file):
             # Create a server certificate for the server based on the CN.
             server = './easyrsa --batch --req-cn={0} --subject-alt-name={1} ' \
-                     'build-server-full server nopass 2>&1'.format(cn, sans)
+                     'build-server-full {2} nopass 2>&1'.format(cn, sans,
+                                                                path_name)
             check_call(split(server))
             # Read the server certificate from the filesystem.
             with open(server_file, 'r') as fp:
@@ -252,11 +256,6 @@ def _decode(encoded):
     except:
         hookenv.log('Error decoding string {0}'.format(encoded))
         raise
-
-
-def _path_safe_name(unit_name):
-    '''Remove the special characters in a unit name (eg. tls/1 -> tls_1)'''
-    return unit_name.replace('/', '_')
 
 
 @contextmanager
