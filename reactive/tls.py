@@ -104,8 +104,8 @@ def import_sign(tls):
                 temp_file = tempfile.NamedTemporaryFile(suffix='.csr')
                 with open(temp_file.name, 'w') as fp:
                     fp.write(csr)
-                # Must remove the path characters from the unit name.
-                path_name = hookenv.local_unit().replace('/', '_')
+                # Must remove the path characters from the unit_name.
+                path_name = unit_name.replace('/', '_')
                 if not os.path.isfile('pki/reqs/{0}.req'.format(path_name)):
                     hookenv.log('Importing csr from {0}'.format(path_name))
                     # Create the command to import the request using path name.
