@@ -72,6 +72,13 @@ def create_csr(tls):
         with chdir('easy-rsa/easyrsa3'):
             # Must remove the path characters from the unit name.
             path_name = hookenv.local_unit().replace('/', '_')
+            # The reqest will be named with unit_name.req
+            req_file = 'pki/reqs/{0}.req'.format(path_name)
+            # If the request already exists do not generate another one.
+            if os.path.isfile(req_file):
+                remove_state('create certificate signing request')
+                return
+
             # The Common Name is the public address of the system.
             cn = hookenv.unit_public_ip()
             hookenv.log('Creating the CSR for {0}'.format(path_name))
@@ -81,7 +88,6 @@ def create_csr(tls):
                       'gen-req {2} nopass 2>&1'.format(cn, sans, path_name)
             check_call(split(gen_req))
             # Read the CSR file.
-            req_file = 'pki/reqs/{0}.req'.format(path_name)
             with open(req_file, 'r') as fp:
                 csr = fp.read()
             # Set the CSR on the relation object.
@@ -128,6 +134,7 @@ def import_sign(tls):
 
 
 @when('signed certificate available')
+@when_not('tls.server.certificate available')
 def copy_server_cert(tls):
     '''Copy the certificate from the relation to the key value store.'''
     # Get the signed certificate from the relation object.
