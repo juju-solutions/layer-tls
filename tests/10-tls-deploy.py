@@ -21,7 +21,7 @@ class TestDeployment(unittest.TestCase):
         '''Set up the deployment in the class.'''
         cls.deployment = amulet.Deployment(series='trusty')
         charm_name = cls.deployment.charm_name
-        print('Starting tests for {0}'.fomrat(charm_name))
+        print('Starting tests for {0}'.format(charm_name))
         # Specify charm_name because this layer could be named something else.
         cls.deployment.add(charm_name, units=3)
         try:
