@@ -50,7 +50,7 @@ def check_ca_status():
             install_ca(certificate_authority)
             # The leader can create the server certificate based on CA.
             hookenv.log('Leader is creating server certificate.')
-            create_server_certificate()
+            create_certificates()
 
 
 @hook('leader-settings-changed')
@@ -69,19 +69,25 @@ def create_csr(tls):
     '''Create a certificate signing request (CSR). Only the followers need to
     run this operation.'''
     if not is_leader():
-        # Must remove the path characters from the unit name.
-        path_name = _path_safe_name(hookenv.local_unit())
-        # The Common Name is the public address of the system.
-        cn = hookenv.unit_public_ip()
-        hookenv.log('Creating the CSR for {0}'.format(cn))
         with chdir('easy-rsa/easyrsa3'):
+            # Must remove the path characters from the unit name.
+            path_name = hookenv.local_unit().replace('/', '_')
+            # The reqest will be named with unit_name.req
+            req_file = 'pki/reqs/{0}.req'.format(path_name)
+            # If the request already exists do not generate another one.
+            if os.path.isfile(req_file):
+                remove_state('create certificate signing request')
+                return
+
+            # The Common Name is the public address of the system.
+            cn = hookenv.unit_public_ip()
+            hookenv.log('Creating the CSR for {0}'.format(path_name))
             sans = get_sans()
             # Create a CSR for this system with the subject and SANs.
             gen_req = './easyrsa --batch --req-cn={0} --subject-alt-name={1} ' \
                       'gen-req {2} nopass 2>&1'.format(cn, sans, path_name)
             check_call(split(gen_req))
             # Read the CSR file.
-            req_file = 'pki/reqs/{0}.req'.format(path_name)
             with open(req_file, 'r') as fp:
                 csr = fp.read()
             # Set the CSR on the relation object.
@@ -100,11 +106,12 @@ def import_sign(tls):
         csr_map = tls.get_csr_map()
         # Iterate over the unit names related to CSRs.
         for unit_name, csr in csr_map.items():
-            path_name = _path_safe_name(unit_name)
             with chdir('easy-rsa/easyrsa3'):
                 temp_file = tempfile.NamedTemporaryFile(suffix='.csr')
                 with open(temp_file.name, 'w') as fp:
                     fp.write(csr)
+                # Must remove the path characters from the unit_name.
+                path_name = unit_name.replace('/', '_')
                 if not os.path.isfile('pki/reqs/{0}.req'.format(path_name)):
                     hookenv.log('Importing csr from {0}'.format(path_name))
                     # Create the command to import the request using path name.
@@ -127,28 +134,30 @@ def import_sign(tls):
 
 
 @when('signed certificate available')
-@when_not('server certificate available')
+@when_not('tls.server.certificate available')
 def copy_server_cert(tls):
     '''Copy the certificate from the relation to the key value store.'''
     # Get the signed certificate from the relation object.
     cert = tls.get_signed_cert()
     if cert:
-        set_server_cert(cert)
+        # The key name is also used to set the reactive state.
+        set_cert('tls.server.certificate', cert)
+        # Remove this state so this method does not run all the time.
         remove_state('signed certificate available')
 
 
-def set_server_cert(server_cert):
-    '''Set the serve certificate on the key value store of the unit, and set
-    the final state for layers to consume.'''
+def set_cert(key, certificate):
+    '''Set the certificate on the key value store of the unit, and set
+    the corresponding state for layers to consume.'''
     # Set cert on the unitdata key value store so other layers can get it.
-    unitdata.kv().set('tls.server.certificate', server_cert)
+    unitdata.kv().set(key, certificate)
     # Set the final state for the other layers to know when they can
     # retrieve the server certificate.
-    set_state('server certificate available')
+    set_state('{0} available'.format(key))
 
 
-@when_not('certificate authority available')
 @when('easyrsa installed')
+@when_not('certificate authority available')
 def create_certificate_authority(certificate_authority=None):
     '''Return the CA and server certificates for this system. If the CA is
     empty, generate a self signged certificate authority.'''
@@ -162,7 +171,7 @@ def create_certificate_authority(certificate_authority=None):
             # Initialize easy-rsa (by deleting old pki) so a CA can be created.
             init = './easyrsa --batch init-pki 2>&1'
             check_call(split(init))
-        # When the CA is not null write the CA file..
+        # When the CA is not None write the CA file.
         if certificate_authority:
             # Write the certificate authority from configuration.
             with open(ca_file, 'w') as fp:
@@ -181,22 +190,40 @@ def create_certificate_authority(certificate_authority=None):
     return certificate_authority
 
 
-def create_server_certificate():
+def create_certificates():
     '''Create the server certificate.'''
     # Use the public ip as the Common Name for the server certificate.
     cn = hookenv.unit_public_ip()
     with chdir('easy-rsa/easyrsa3'):
-        server_file = 'pki/issued/{0}.crt'.format(cn)
+        # Must remove the path characters from the unit name tls/0 -> tls_0.
+        path_name = hookenv.local_unit().replace('/', '_')
+        server_file = 'pki/issued/{0}.crt'.format(path_name)
+        sans = get_sans()
         # Do not regenerate the server certificate if it already exists.
         if not os.path.isfile(server_file):
             # Create a server certificate for the server based on the CN.
             server = './easyrsa --batch --req-cn={0} --subject-alt-name={1} ' \
-                     'build-server-full {0} nopass 2>&1'.format(cn, get_sans())
+                     'build-server-full {2} nopass 2>&1'.format(cn, sans,
+                                                                path_name)
             check_call(split(server))
             # Read the server certificate from the filesystem.
             with open(server_file, 'r') as fp:
-                cert = fp.read()
-            set_server_cert(cert)
+                server_cert = fp.read()
+            # The key name is also used to set the reactive state.
+            set_cert('tls.server.certificate', server_cert)
+
+        client_file = 'pki/issued/client.crt'
+        # Do not regenerate the client certificate if it already exists.
+        if not os.path.isfile(client_file):
+            # Create a client certificate and key.
+            client = './easyrsa --batch --req-cn={0} --subject-alt-name={1} ' \
+                     'build-client-full client nopass 2>&1'.format(cn, sans)
+            check_call(split(client))
+            # Read the client certificate from the filesystem.
+            with open(client_file, 'r') as fp:
+                client_cert = fp.read()
+            # The key name is also used to set the reactive state.
+            set_cert('tls.client.certificate', client_cert)
 
 
 def install_ca(certificate_authority):
@@ -208,6 +235,8 @@ def install_ca(certificate_authority):
         fp.write(certificate_authority)
     # Update the trusted CAs on this system.
     check_call(['update-ca-certificates'])
+    # Notify other layers that the certificate authority is available.
+    set_state('tls.certificate.authority available')
 
 
 def get_sans(ip_list=None, dns_list=None):
@@ -234,11 +263,6 @@ def _decode(encoded):
     except:
         hookenv.log('Error decoding string {0}'.format(encoded))
         raise
-
-
-def _path_safe_name(unit_name):
-    '''Remove the special characters in a unit name (eg. tls/1 -> tls_1)'''
-    return unit_name.replace('/', '_')
 
 
 @contextmanager
