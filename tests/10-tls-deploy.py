@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 
+# This is a functional test for the tls layer.  It verifies the keys and
+# certificates are generated correctly.  This test is written without hard
+# coding the charm name so this will work with charms that are created from
+# the tls layer.
+
 import amulet
 import os
 import unittest
@@ -15,9 +20,10 @@ class TestDeployment(unittest.TestCase):
     def setUpClass(cls):
         '''Set up the deployment in the class.'''
         cls.deployment = amulet.Deployment(series='trusty')
+        charm_name = cls.deployment.charm_name
+        print(charm_name)
         # Specify charm_name because this layer could be named something else.
-        cls.deployment.add('tls', cls.deployment.charm_name, units=3)
-        # cls.deploy.configure('tls', config)
+        cls.deployment.add(charm_name, units=3)
         try:
             cls.deployment.setup(timeout=seconds)
             cls.deployment.sentry.wait()
@@ -28,53 +34,70 @@ class TestDeployment(unittest.TestCase):
             raise
 
     def test_all_units(self):
-        for unit in self.deployment.sentry['tls']:
+        service = self.deployment.charm_name
+        for unit in self.deployment.sentry[service]:
             print('Testing unit {0}'.format(unit.info['unit']))
             if is_leader(unit):
-                tls_leader_tests(unit, self.test_config['ca'])
+                tls_leader_tests(unit)
             else:
-                tls_follower_tests(unit, self.test_config['ca'])
+                tls_follower_tests(unit)
 
 
 def tls_follower_tests(unit, ca=None):
     '''Run tests on a follower unit, optionally sending in the CA to
-    verify that it is indeed installed on the unit's trust ring.'''
-    certificate = verify_unitdata(unit, 'tls.server.certificate')
-    public_ip = unit.info['public-address']
-    private_ip = None
-    # TODO: Re-enable this check for public address in the SAN.
-    # Issue #1, the SAN is not getting generated for the follower's cert.
-    # verify_san(certificate, public_ip, private_ip)
-    verify_tls_pem(unit, ca)
+    verify that it is installed on the unit.'''
+    charm_dir = '/var/lib/juju/agents/unit-{service}-{unit}/charm'.format(
+        **unit.info)
+    key_name = '{service}_{unit}.key'.format(**unit.info)
+    print('Verify pki/private/{0} exists and is not empty.'.format(key_name))
+    key_path = 'easy-rsa/easyrsa3/pki/private/{0}'.format(key_name)
+    key = unit.file_contents(os.path.join(charm_dir, key_path))
+    assert key, 'The {0} was empty'.format(key_path)
+    print('Verify the server certificate is on the unitdata.')
+    server_certificate = verify_unitdata(unit, 'tls.server.certificate')
+    cn = 'CN={public-address}'.format(**unit.info)
+    assert cn in server_certificate, 'The public-address is not in the cert!'
+    print('Verify the CA certificate exists and is not empty.')
+    # The CA path on followers is different than on the leader.
+    path = '/usr/local/share/ca-certificates/{service}.crt'.format(**unit.info)
+    ca_cert = unit.file_contents(path)
+    assert ca_cert, 'The CA was empty, should be at {0}'.format(path)
+    assert 'BEGIN CERTIFICATE' in ca_cert, 'CA is not a valid certificate.'
+    assert 'END CERTIFICATE' in ca_cert, 'CA is not a valid certificate'
 
 
 def tls_leader_tests(unit, ca=None):
     '''Run tests on a leader unit, optionally sending in the CA to verify
     that it is installed on the unit's trust ring.'''
     assert is_leader(unit), 'This unit is not the leader.'
-    print('Verify the Certifiicate Authority (CA) exits on the leader.')
-    # Read the CA file, this tests if the leader created the CA file.
     charm_dir = '/var/lib/juju/agents/unit-{service}-{unit}/charm'.format(
         **unit.info)
-    ca_file = os.path.join(charm_dir, 'easy-rsa/easyrsa3/pki/ca.crt')
-    ca_cert = unit.file_contents(ca_file)
-    assert ca_cert, 'The Certificate Authority file is empty.'
-    if ca:
-        assert ca == ca_cert, 'The CAs do not match.'
+    print('Verify the Certifiicate Authority (CA) exits on the leader.')
+    ca_path = os.path.join(charm_dir, 'easy-rsa/easyrsa3/pki/ca.crt')
+    # Read the CA file, this tests if the leader created the CA file.
+    ca_cert = unit.file_contents(ca_path)
+    assert ca_cert, 'The CA was empty, should be at {0}'.format(ca_path)
+    assert 'BEGIN CERTIFICATE' in ca_cert, 'CA is not a valid certificate.'
+    assert 'END CERTIFICATE' in ca_cert, 'CA is not a valid certificate'
+
+    print('Verify the server certificate ')
     certificate = verify_unitdata(unit, 'tls.server.certificate')
     public_ip = unit.info['public-address']
     private_ip = None
     verify_san(certificate, public_ip, private_ip)
-    print('Verify the leader generated server certificate contains SANs')
-    # Read the server certificate, testing if the leader created the file.
-    server_path = 'easy-rsa/easyrsa3/pki/issued/{0}.crt'.format(public_ip)
-    server_file = os.path.join(charm_dir, server_path)
-    server_cert = unit.file_contents(server_file).strip()
-    assert server_cert, 'Server certificate is empty.'
-    verify_san(server_cert, public_ip, private_ip)
-    assert server_cert == certificate
-    # Verify the tls certificate is accepted in this unit
-    verify_tls_pem(unit, ca)
+
+    print('Verify the client key and certificate were created.')
+    client_key_name = 'easy-rsa/easyrsa3/pki/private/client.key'
+    client_key_path = os.path.join(charm_dir, client_key_name)
+    client_key = unit.file_contents(client_key_path)
+    assert client_key, 'The client key should not be empty.'
+    assert 'PRIVATE KEY' in client_key, 'The client key is not valid.'
+    client_cert_name = 'easy-rsa/easyrsa3/pki/issued/client.crt'
+    client_cert_path = os.path.join(charm_dir, client_cert_name)
+    client_cert = unit.file_contents(client_cert_path)
+    assert client_cert, 'The client certificate should not be empty.'
+    assert 'Subject: CN=client' in client_cert, 'The Subject name was invalid.'
+    verify_san(client_cert, public_ip, private_ip)
 
 
 def is_leader(unit):
@@ -115,17 +138,6 @@ def verify_san(cert, public_ip, private_ip):
     if private_ip:
         private_san = 'IP Address:{0}'.format(private_ip)
         assert private_san in cert, 'Cert does not contain private ip address'
-
-
-def verify_tls_pem(unit, ca=None):
-    '''Verify that this system contains the trusted certificate.'''
-    print('Verifying the certificate is trusted on the unit.')
-    # Ensure that the tls.pem file was trusted on this machine.
-    tls_pem_file = '/etc/ssl/certs/tls.pem'
-    tls_pem = unit.file_contents(tls_pem_file)
-    assert tls_pem, 'The trusted PEM file is empty.'
-    if ca:
-        assert ca in tls_pem, 'The PEM does not match the CA.'
 
 
 if __name__ == '__main__':
