@@ -21,7 +21,7 @@ class TestDeployment(unittest.TestCase):
         '''Set up the deployment in the class.'''
         cls.deployment = amulet.Deployment(series='trusty')
         charm_name = cls.deployment.charm_name
-        print(charm_name)
+        print('Starting tests for {0}'.fomrat(charm_name))
         # Specify charm_name because this layer could be named something else.
         cls.deployment.add(charm_name, units=3)
         try:
@@ -36,7 +36,7 @@ class TestDeployment(unittest.TestCase):
     def test_all_units(self):
         service = self.deployment.charm_name
         for unit in self.deployment.sentry[service]:
-            print('Testing unit {0}'.format(unit.info['unit']))
+            print('Testing unit {service}/{unit}'.format(**unit.info))
             if is_leader(unit):
                 tls_leader_tests(unit)
             else:
@@ -118,10 +118,9 @@ def get_leader(deployment, service_name):
 
 def verify_unitdata(unit, key):
     '''Verify the key is available on the unitdata.'''
-    print('Verifying {0} is available on unitdata.'.format(key))
+    print('Verify that "{0}" is available on unitdata.'.format(key))
     # Get the server cert from the unitdata key value store.
     chlp_command = 'chlp unitdata get {0}'.format(key)
-    print(chlp_command)
     output, exit_code = unit.run(chlp_command)
     assert exit_code == 0, 'The chlp command was not successful'
     assert output, 'The key {0} has no value.'.format(key)
