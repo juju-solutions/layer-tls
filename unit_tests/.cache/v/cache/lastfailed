@@ -1,0 +1,4 @@
+{
+  "test_actions.py::test_ca": true, 
+  "test_actions.py::test_server_cert": true
+}
