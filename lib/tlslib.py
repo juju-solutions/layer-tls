@@ -117,6 +117,8 @@ def _copy_key(directory, prefix, key_path):
     destination_key_path = os.path.join(directory, key_name)
     # Copy the key file from the local directory to the destination.
     copy2(key_path, destination_key_path)
+    # Store the path to the key in unitdata
+    unitdata.kv().set('key-path', destination_key_path)
 
 
 def _save_certificate(directory, prefix):
@@ -140,3 +142,5 @@ def _save_certificate(directory, prefix):
     # write the server certificate out to the correct location
     with open(certificate_path, 'w') as fp:
         fp.write(str(certificate_data))
+    # Store the path to the cert in unitdata
+    unitdata.kv().set('cert-path', certificate_path)
