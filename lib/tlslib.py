@@ -65,7 +65,6 @@ def copy_key(directory, prefix):
     """
     Copy the key from the easy-rsa/easyrsa3/pki/private directory to the
     specified directory.
-
     
     @param string directory dest dir for key
     @param string prefix prefix for cert
