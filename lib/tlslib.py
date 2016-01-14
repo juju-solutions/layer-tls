@@ -27,13 +27,13 @@ def client_cert(destination_directory):
     webapp_cert_path = os.path.join(destination_directory, 'client.crt')
     if os.path.isfile(client_cert_path):
         # Copy the client.crt to dest_dir/client.crt
-        copy2(client_cert_path, kube_cert_path)
+        copy2(client_cert_path, webapp_cert_path)
     # The client key is only available on the leader.
     client_key_path = 'easy-rsa/easyrsa3/pki/private/client.key'
     webapp_key_path = os.path.join(destination_directory, 'client.key')
     if os.path.isfile(client_key_path):
         # Copy the client.key to dest_dir/client.key
-        copy2(client_key_path, kube_key_path)
+        copy2(client_key_path, webapp_key_path)
 
 
 def ca(directory):
