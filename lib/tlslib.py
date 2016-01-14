@@ -1,24 +1,29 @@
 import os
-
 from shutil import copy2
 
-from charms.reactive import hook
-from charms.reactive import set_state
-
 from charmhelpers.core import hookenv
-from charmhelpers.core.hookenv import status_set
 from charmhelpers.core import unitdata
 
 
 def server_cert(destination_directory):
-    # Save the server certificate from unitdata to dest_dir
+    """
+    Copy server cert to destination_directory
+
+    @param string destination_directory dest dir for server cert
+    """
+    #Save the server certificate from unitdata to dest_dir
     save_certificate(destination_directory, 'server')
     # Copy the unitname.key to dest_dir/server.key
     copy_key(destination_directory, 'server')
-    set_state('webapp.server.certificate available')
 
 
 def client_cert(destination_directory):
+    """
+    Copy client cert to destination_directory
+
+    @param string destination_directory dest dir for client cert
+    """
+    # Check for directory existence
     if not os.path.isdir(destination_directory):
         os.makedirs(destination_directory)
         os.chmod(destination_directory, 0o770)
@@ -37,8 +42,12 @@ def client_cert(destination_directory):
 
 
 def ca(directory):
-    '''When the Certificate Authority is available, copy the CA from the
-    /usr/local/share/ca-certificates/<service_name>.crt to the proper directory. '''
+    """
+    When the Certificate Authority is available, copy the CA from the
+    /usr/local/share/ca-certificates/<service_name>.crt to the proper directory.
+
+    @param string directory dest dir for crt
+    """
     # Ensure the dest_dir exists.
     if not os.path.isdir(directory):
         os.makedirs(directory)
@@ -51,12 +60,15 @@ def ca(directory):
     destination_ca_path = os.path.join(directory, 'ca.crt')
     if os.path.isfile(ca_path):
         copy2(ca_path, destination_ca_path)
-        set_state('webapp.certificate.authority available')
-
 
 def copy_key(directory, prefix):
-    '''Copy the key from the easy-rsa/easyrsa3/pki/private directory to the
-    specified directory. '''
+    """
+    Copy the key from the easy-rsa/easyrsa3/pki/private directory to the
+    specified directory.
+
+    
+    @param string directory dest dir for key
+    """
     if not os.path.isdir(directory):
         os.makedirs(directory)
         os.chmod(directory, 0o770)
@@ -72,9 +84,13 @@ def copy_key(directory, prefix):
 
 
 def save_certificate(directory, prefix):
-    '''Get the certificate from the charm unitdata, and write it to the proper
+    """
+    Get the certificate from the charm unitdata, and write it to the proper
     directory. The parameters are: destination directory, and prefix to use
-    for the key and certificate name.'''
+    for the key and certificate name.
+
+    @param string directory dest dir to save cert
+    """
     if not os.path.isdir(directory):
         os.makedirs(directory)
         os.chmod(directory, 0o770)
