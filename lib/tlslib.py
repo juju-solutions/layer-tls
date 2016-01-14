@@ -23,9 +23,9 @@ def server_cert(destination_directory, key_path=None):
         local_key_path = key_path
 
     #Save the server certificate from unitdata to dest_dir
-    save_certificate(destination_directory, 'server')
+    _save_certificate(destination_directory, 'server')
     # Copy the unitname.key to dest_dir/server.key
-    copy_key(destination_directory, 'server', local_key_path)
+    _copy_key(destination_directory, 'server', local_key_path)
 
 
 def client_cert(destination_directory, cert_path=None, key_path=None):
@@ -96,7 +96,7 @@ def ca(directory, cert_path=None):
     if os.path.isfile(ca_path):
         copy2(ca_path, destination_ca_path)
 
-def copy_key(directory, prefix, key_path):
+def _copy_key(directory, prefix, key_path):
     """
     Copy the key from the easy-rsa/easyrsa3/pki/private directory to the
     specified directory.
@@ -119,7 +119,7 @@ def copy_key(directory, prefix, key_path):
     copy2(key_path, destination_key_path)
 
 
-def save_certificate(directory, prefix):
+def _save_certificate(directory, prefix):
     """
     Get the certificate from the charm unitdata, and write it to the proper
     directory. The parameters are: destination directory, and prefix to use
