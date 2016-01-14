@@ -68,6 +68,7 @@ def copy_key(directory, prefix):
 
     
     @param string directory dest dir for key
+    @param string prefix prefix for cert
     """
     if not os.path.isdir(directory):
         os.makedirs(directory)
@@ -90,6 +91,7 @@ def save_certificate(directory, prefix):
     for the key and certificate name.
 
     @param string directory dest dir to save cert
+    @param string prefix prefix for cert
     """
     if not os.path.isdir(directory):
         os.makedirs(directory)
