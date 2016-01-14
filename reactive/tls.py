@@ -13,6 +13,7 @@ from charms.reactive import set_state
 from charms.reactive import when
 from charms.reactive import when_not
 
+from charmhelpers.core.host import chdir
 from charmhelpers.core import hookenv
 from charmhelpers.core import unitdata
 from charmhelpers.core.hookenv import is_leader
@@ -263,13 +264,3 @@ def _decode(encoded):
     except:
         hookenv.log('Error decoding string {0}'.format(encoded))
         raise
-
-
-@contextmanager
-def chdir(path):
-    '''Change the current working directory to a different directory for a code
-    block and return the previous directory after the block exits.'''
-    old_dir = os.getcwd()
-    os.chdir(path)
-    yield
-    os.chdir(old_dir)
