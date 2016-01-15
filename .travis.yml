@@ -5,6 +5,7 @@ python:
  - '3.5'
 
 install:
-- pip install tox
+ - pip install tox
 
-test: tox
+script:
+ - tox
