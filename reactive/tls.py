@@ -19,7 +19,6 @@ from charmhelpers.core import unitdata
 from charmhelpers.core.hookenv import is_leader
 from charmhelpers.core.hookenv import leader_set
 from charmhelpers.core.hookenv import leader_get
-from contextlib import contextmanager
 
 
 @when_not('easyrsa installed')
@@ -240,21 +239,34 @@ def install_ca(certificate_authority):
     set_state('tls.certificate.authority available')
 
 
-def get_sans(ip_list=None, dns_list=None):
-    '''Return a string suitable for the easy-rsa subjectAltNames, if both
-    ip_list and dns_list parameters are empty the method will generate a valid
-    sans string with the public IP, private IP, and hostname of THIS system.'''
+def get_sans(address_list=[]):
+    '''Return a string suitable for the easy-rsa subjectAltNames, if the
+    address list parameter is empty the method will generate a valid
+    SANs string with the public IP, private IP, and hostname of THIS system.'''
+    if not address_list:
+        # The public and private address could be FQDN or IP addresses.
+        address_list.append(hookenv.unit_public_ip())
+        address_list.append(hookenv.unit_private_ip())
+        address_list.append(socket.gethostname())
+
     sans = []
-    for ip in ip_list or []:
-        sans.append('IP:{0}'.format(ip))
-    for dns in dns_list or []:
-        sans.append('DNS:{0}'.format(dns))
-    if not sans:
-        # Create a default subject alternate name (SAN) string for this system.
-        sans.append('IP:{0},IP:{1},DNS:{2}'.format(hookenv.unit_public_ip(),
-                                                   hookenv.unit_private_ip(),
-                                                   socket.gethostname()))
+    for address in address_list:
+        if _is_ip(address):
+            sans.append('IP:{0}'.format(address))
+        else:
+            sans.append('DNS:{0}'.format(address))
     return ','.join(sans)
+
+
+def _is_ip(address):
+    '''Return True if the address is an IP address, false otherwise.'''
+    import ipaddress
+    try:
+        # This method will raise a ValueError if argument is not an IP address.
+        ipaddress.ip_address(address)
+        return True
+    except ValueError:
+        return False
 
 
 def _decode(encoded):
