@@ -15,23 +15,11 @@ from charms.reactive import when_not
 
 from charmhelpers.core import hookenv
 from charmhelpers.core import unitdata
+from charmhelpers.core.hookenv import log
 from charmhelpers.core.hookenv import is_leader
 from charmhelpers.core.hookenv import leader_set
 from charmhelpers.core.hookenv import leader_get
 from contextlib import contextmanager
-
-
-@when('tls.regenerate_certificates')
-def regenerate_certificates():
-    ''' Allow the calling layer to modify settings, and trigger the
-        certificates to be re-generated (perhaps we updated the openssl conf)
-    '''
-    print(' ==> regenerating certificates')
-    # this is destructive...
-    install()
-    check_ca_status(force=True)
-    create_certificates()
-    remove_state('tls.regenerate_certificates')
 
 
 @when_not('easyrsa installed')
@@ -48,8 +36,14 @@ def install():
         check_call(split('./easyrsa --batch init-pki 2>&1'))
     set_state('easyrsa installed')
 
-
 @when('easyrsa installed')
+@when_not('easyrsa configured')
+def configure_easyrsa():
+    ''' Transitional state, allowing other layer(s) to modify config before we
+        proceed generating the certificates and working with PKI '''
+    set_state('easyrsa configured')
+
+@when('easyrsa configured')
 def check_ca_status(force=False):
     '''Called when the configuration values have changed.'''
     config = hookenv.config()
