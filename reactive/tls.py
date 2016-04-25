@@ -21,6 +21,19 @@ from charmhelpers.core.hookenv import leader_get
 from contextlib import contextmanager
 
 
+@when('tls.regenerate_certificates')
+def regenerate_certificates():
+    ''' Allow the calling layer to modify settings, and trigger the
+        certificates to be re-generated (perhaps we updated the openssl conf)
+    '''
+    print(' ==> regenerating certificates')
+    # this is destructive...
+    install()
+    check_ca_status(force=True)
+    create_certificates()
+    remove_state('tls.regenerate_certificates')
+
+
 @when_not('easyrsa installed')
 def install():
     '''Install the easy-rsa software that is required for this layer.'''
@@ -37,10 +50,10 @@ def install():
 
 
 @when('easyrsa installed')
-def check_ca_status():
+def check_ca_status(force=False):
     '''Called when the configuration values have changed.'''
     config = hookenv.config()
-    if config.changed('root_certificate'):
+    if config.changed('root_certificate') or force:
         remove_state('certificate authority available')
         if is_leader():
             root_cert = _decode(config.get('root_certificate'))
