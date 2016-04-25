@@ -16,6 +16,7 @@ from charms.reactive import when_not
 from charmhelpers.core.host import chdir
 from charmhelpers.core import hookenv
 from charmhelpers.core import unitdata
+from charmhelpers.core.hookenv import log
 from charmhelpers.core.hookenv import is_leader
 from charmhelpers.core.hookenv import leader_set
 from charmhelpers.core.hookenv import leader_get
@@ -35,12 +36,18 @@ def install():
         check_call(split('./easyrsa --batch init-pki 2>&1'))
     set_state('easyrsa installed')
 
-
 @when('easyrsa installed')
-def check_ca_status():
+@when_not('easyrsa configured')
+def configure_easyrsa():
+    ''' Transitional state, allowing other layer(s) to modify config before we
+        proceed generating the certificates and working with PKI '''
+    set_state('easyrsa configured')
+
+@when('easyrsa configured')
+def check_ca_status(force=False):
     '''Called when the configuration values have changed.'''
     config = hookenv.config()
-    if config.changed('root_certificate'):
+    if config.changed('root_certificate') or force:
         remove_state('certificate authority available')
         if is_leader():
             root_cert = _decode(config.get('root_certificate'))
