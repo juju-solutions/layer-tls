@@ -19,14 +19,19 @@ juju add-unit tls -n 2
 This charm makes use of the reactive framework where states are set or removed.
 The charm code can respond to these layers appropriately.
 
-## server certificate available
+## tls.server.certificate available
 The certificate for this server is available in the unitdata of this charm as `tls.certificate`.
 
 ```python
-from charmhelpers.core import unitdata
-database = unitdata.kv()
-cert = database.get('tls.server.certificate')
+@when('tls.server.certificate available')
+def secure_my_sevice():
+  from charmhelpers.core import unitdata
+  database = unitdata.kv()
+  cert = database.get('tls.server.certificate')
 ```
+
+From here you write the cert to disk and do configure your app.
+
 
 # Contact
 
