@@ -47,11 +47,13 @@ def configure_easyrsa():
     # and the implications are not fully clear on this.
     with open('easy-rsa/easyrsa3/openssl-1.0.cnf', 'r') as f:
         conf = f.readlines()
-    for idx,line in enumerate(conf):
-        if '[ CA_default ]' in line:
-            conf.insert(idx + 1, "copy_extensions = copy")
-    with open('easy-rsa/easyrsa3/openssl-1.0.cnf', 'w+') as f:
-        f.writelines(conf)
+    # idempotency is a thing
+    if 'copy_extensions = copy' not in conf:
+        for idx,line in enumerate(conf):
+            if '[ CA_default ]' in line:
+                conf.insert(idx + 1, "copy_extensions = copy")
+        with open('easy-rsa/easyrsa3/openssl-1.0.cnf', 'w+') as f:
+            f.writelines(conf)
 
     set_state('easyrsa configured')
 
