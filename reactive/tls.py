@@ -163,7 +163,7 @@ def set_cert(key, certificate):
     set_state('{0} available'.format(key))
 
 
-@when('easyrsa installed')
+@when('easyrsa configured')
 @when_not('certificate authority available')
 def create_certificate_authority(certificate_authority=None):
     '''Return the CA and server certificates for this system. If the CA is
