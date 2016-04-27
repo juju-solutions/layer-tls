@@ -40,7 +40,19 @@ def install():
 @when_not('easyrsa configured')
 def configure_easyrsa():
     ''' Transitional state, allowing other layer(s) to modify config before we
-        proceed generating the certificates and working with PKI '''
+        proceed generating the certificates and working with PKI. '''
+
+    # Update EasyRSA configuration with the capacity to copy CSR Requested
+    # Extensions through to the resulting certificate. This can be tricky,
+    # and the implications are not fully clear on this.
+    with open('easy-rsa/easyrsa3/openssl-1.0.cnf', 'r') as f:
+        conf = f.readlines()
+    for idx,line in enumerate(conf):
+        if '[ CA_default ]' in line:
+            conf.insert(idx + 1, "copy_extensions = copy")
+    with open('easy-rsa/easyrsa3/openssl-1.0.cnf', 'w+') as f:
+        f.writelines(conf)
+
     set_state('easyrsa configured')
 
 @when('easyrsa configured')
