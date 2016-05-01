@@ -16,7 +16,6 @@ from charms.reactive import when_not
 from charmhelpers.core.host import chdir
 from charmhelpers.core import hookenv
 from charmhelpers.core import unitdata
-from charmhelpers.core.hookenv import log
 from charmhelpers.core.hookenv import is_leader
 from charmhelpers.core.hookenv import leader_set
 from charmhelpers.core.hookenv import leader_get
@@ -36,6 +35,7 @@ def install():
         check_call(split('./easyrsa --batch init-pki 2>&1'))
     set_state('easyrsa installed')
 
+
 @when('easyrsa installed')
 @when_not('easyrsa configured')
 def configure_easyrsa():
@@ -49,13 +49,14 @@ def configure_easyrsa():
         conf = f.readlines()
     # idempotency is a thing
     if 'copy_extensions = copy' not in conf:
-        for idx,line in enumerate(conf):
+        for idx, line in enumerate(conf):
             if '[ CA_default ]' in line:
                 conf.insert(idx + 1, "copy_extensions = copy")
         with open('easy-rsa/easyrsa3/openssl-1.0.cnf', 'w+') as f:
             f.writelines(conf)
 
     set_state('easyrsa configured')
+
 
 @when('easyrsa configured')
 def check_ca_status(force=False):
@@ -105,8 +106,8 @@ def create_csr(tls):
             hookenv.log('Creating the CSR for {0}'.format(path_name))
             sans = get_sans()
             # Create a CSR for this system with the subject and SANs.
-            gen_req = './easyrsa --batch --req-cn={0} --subject-alt-name={1} ' \
-                      'gen-req {2} nopass 2>&1'.format(cn, sans, path_name)
+            gen_req = './easyrsa --batch --req-cn={0} --subject-alt-name={1}' \
+                      ' gen-req {2} nopass 2>&1'.format(cn, sans, path_name)
             check_call(split(gen_req))
             # Read the CSR file.
             with open(req_file, 'r') as fp:
