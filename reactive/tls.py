@@ -246,6 +246,7 @@ def create_certificates():
                 client_cert = fp.read()
             # The key name is also used to set the reactive state.
             set_cert('tls.client.certificate', client_cert)
+            set_state('client certificate available')
 
 
 def install_ca(certificate_authority):
