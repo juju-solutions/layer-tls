@@ -1,7 +1,7 @@
 name: tls
-summary: A layer that uses Transport Layer Security (TLS) to create secure communication.
+summary: A Juju charm layer using Transport Layer Security (TLS) to create secure communication.
 maintainers:
-    - Matthew Bruzek <matthew.bruzek@ubuntu.com>
+    - Matthew Bruzek <matthew.bruzek@canonical.com>
 description: |
   Uses a root certificate to secure communication between charms of the same
   type using the peer relation.
