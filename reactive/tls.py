@@ -270,6 +270,7 @@ def install_ca(certificate_authority):
     '''Install a certificiate authority on the system.'''
     ca_file = '/usr/local/share/ca-certificates/{0}.crt'.format(
         hookenv.service_name())
+    hookenv.log('Writing CA to {0}'.format(ca_file))
     # Write the contents of certificate authority to the file.
     with open(ca_file, 'w') as fp:
         fp.write(certificate_authority)
