@@ -1,35 +1,70 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
+
+# These are unit tests for the tlslib.  It verifies the keys and
+# certificates are copied correctly.
+
 import os
-import tlslib
+import pwd
 import shutil
-from mock import patch
+import unittest
+import tempfile
+
+import tlslib
 
 
-def test_ca():
-    tlslib.ca('/tmp/tls', 'unit_tests/tls-test.crt')
-    assert os.path.isdir('/tmp/tls')
-    assert os.path.isfile('/tmp/tls/ca.crt')
-    shutil.rmtree('/tmp/tls')
+class TestLib(unittest.TestCase):
+    """A unittest class to test the copy commands of the tls library."""
+
+    def setUp(self):
+        """Create a temporary directory for the test."""
+        self.temporary_directory = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Delete the temporary directory for the test."""
+        shutil.rmtree(self.temporary_directory)
+
+    def test_ca(self):
+        """Test the CA copy method."""
+        directory = os.path.join(self.temporary_directory, 'ca')
+        user = pwd.getpwuid(os.getuid())[0]
+        group = pwd.getpwuid(os.getuid())[0]
+        destination = os.path.join(directory, 'ca.crt')
+        tlslib.ca('unit_tests/tls-test.crt', destination, user, group)
+        assert os.path.isdir(directory)
+        assert os.path.isfile(destination)
+
+    def test_client_cert(self):
+        """Test the copy client cert."""
+        directory = os.path.join(self.temporary_directory, 'client_cert')
+        destination = os.path.join(directory, 'client.crt')
+        tlslib.client_cert('unit_tests/tls-client-test.crt', destination)
+        assert os.path.isdir(directory)
+        assert os.path.isfile(destination)
+
+    def test_client_key(self):
+        """Test the copy client key."""
+        directory = os.path.join(self.temporary_directory, 'client_key')
+        destination = os.path.join(directory, 'client.key')
+        tlslib.client_key('unit_tests/tls-client-test.key', destination)
+        assert os.path.isdir(directory)
+        assert os.path.isfile(destination)
+
+    def test_server_cert(self):
+        """Test the copy server cert."""
+        directory = os.path.join(self.temporary_directory, 'server_cert')
+        destination = os.path.join(directory, 'server.crt')
+        tlslib.client_cert('unit_tests/tls-test.crt', destination)
+        assert os.path.isdir(directory)
+        assert os.path.isfile(destination)
+
+    def test_server_key(self):
+        """Test the copy server key."""
+        directory = os.path.join(self.temporary_directory, 'server_key')
+        destination = os.path.join(directory, 'server.key')
+        tlslib.client_key('unit_tests/tls-test.key', destination)
+        assert os.path.isdir(directory)
+        assert os.path.isfile(destination)
 
 
-def test_client_cert():
-    tlslib.client_cert('/tmp/tls/client', 'unit_tests/tls-client-test.crt',
-                       'unit_tests/tls-client-test.key')
-    assert os.path.isdir('/tmp/tls/client')
-    assert os.path.isfile('/tmp/tls/client/client.crt')
-    assert os.path.isfile('/tmp/tls/client/client.key')
-    shutil.rmtree('/tmp/tls')
-
-
-def test_server_cert():
-    with patch('tlslib.unitdata.kv') as kvpatch:
-        os.environ['JUJU_UNIT_NAME'] = 'tls-unit-name'
-        with open('unit_tests/tls-test.crt', 'r') as fp:
-            certificate_data = fp.read()
-        # Mock up the return values with the certificate data.
-        kvpatch.return_value.get.return_value = certificate_data
-        tlslib.server_cert('/tmp/tls/server', 'unit_tests/tls-test.key')
-        assert os.path.isdir('/tmp/tls/server')
-        assert os.path.isfile('/tmp/tls/server/server.key')
-        assert os.path.isfile('/tmp/tls/server/server.crt')
-        shutil.rmtree('/tmp/tls')
+if __name__ == '__main__':
+    unittest.main()
