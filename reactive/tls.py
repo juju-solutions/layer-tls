@@ -168,16 +168,6 @@ def copy_server_cert(tls):
         remove_state('signed certificate available')
 
 
-def set_cert(key, certificate):
-    '''Set the certificate on the key value store of the unit, and set
-    the corresponding state for layers to consume.'''
-    # Set cert on the unitdata key value store so other layers can get it.
-    unitdata.kv().set(key, certificate)
-    # Set the final state for the other layers to know when they can
-    # retrieve the server certificate.
-    set_state('{0} available'.format(key))
-
-
 @when('easyrsa configured')
 @when_not('certificate authority available')
 def create_certificate_authority(certificate_authority=None):
@@ -210,6 +200,34 @@ def create_certificate_authority(certificate_authority=None):
                 certificate_authority = fp.read()
     set_state('certificate authority available')
     return certificate_authority
+
+
+@when('easyrsa installed', 'tls.client.authorization.required')
+@when_not('tls.client.authorization.added')
+def add_client_authorization():
+    '''easyrsa has a default OpenSSL configuration that does not support
+    client authentication. Append "clientAuth" to the server ssl certificate
+    configuration. This is not default, to enable this in your charm set the
+    reactive state 'tls.client.authorization.required'.
+    '''
+    if not is_leader():
+        return
+    else:
+        hookenv.log('Configuring SSL PKI for clientAuth')
+
+    openssl_config = 'easy-rsa/easyrsa3/x509-types/server'
+    hookenv.log('Updating {0}'.format(openssl_config))
+
+    with open(openssl_config, 'r') as f:
+        existing_template = f.readlines()
+
+    # Enable client and server authorization for certificates
+    xtype = [w.replace('serverAuth', 'serverAuth, clientAuth') for w in existing_template]  # noqa
+    # Write the configuration file back out.
+    with open(openssl_config, 'w+') as f:
+        f.writelines(xtype)
+
+    set_state('tls.client.authorization.added')
 
 
 def create_certificates():
@@ -253,6 +271,7 @@ def install_ca(certificate_authority):
     '''Install a certificiate authority on the system.'''
     ca_file = '/usr/local/share/ca-certificates/{0}.crt'.format(
         hookenv.service_name())
+    hookenv.log('Writing CA to {0}'.format(ca_file))
     # Write the contents of certificate authority to the file.
     with open(ca_file, 'w') as fp:
         fp.write(certificate_authority)
@@ -279,6 +298,16 @@ def get_sans(address_list=[]):
         else:
             sans.append('DNS:{0}'.format(address))
     return ','.join(sans)
+
+
+def set_cert(key, certificate):
+    '''Set the certificate on the key value store of the unit, and set
+    the corresponding state for layers to consume.'''
+    # Set cert on the unitdata key value store so other layers can get it.
+    unitdata.kv().set(key, certificate)
+    # Set the final state for the other layers to know when they can
+    # retrieve the server certificate.
+    set_state('{0} available'.format(key))
 
 
 def _is_ip(address):
