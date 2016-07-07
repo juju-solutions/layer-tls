@@ -71,8 +71,13 @@ def check_ca_status(force=False):
             leader_set({'certificate_authority': certificate_authority})
             install_ca(certificate_authority)
             # The leader can create the server certificate based on CA.
-            hookenv.log('Leader is creating server certificate.')
-            create_certificates()
+            hookenv.log('Leader is creating the server certificate.')
+            # Remove the path characters from the unit name tls/0 -> tls_0.
+            path_safe_name = hookenv.local_unit().replace('/', '_')
+            create_server_certificate(path_safe_name)
+            # The leader can create a client certificate one time.
+            hookenv.log('Leader is creating the client certificate.')
+            create_client_certificate()
 
 
 @hook('leader-settings-changed')
@@ -230,21 +235,18 @@ def add_client_authorization():
     set_state('tls.client.authorization.added')
 
 
-def create_certificates():
-    '''Create the server certificate.'''
+def create_server_certificate(name='server'):
+    '''Create the server certificate and server key.'''
     # Use the public ip as the Common Name for the server certificate.
     cn = hookenv.unit_public_ip()
     with chdir('easy-rsa/easyrsa3'):
-        # Must remove the path characters from the unit name tls/0 -> tls_0.
-        path_name = hookenv.local_unit().replace('/', '_')
-        server_file = 'pki/issued/{0}.crt'.format(path_name)
+        server_file = 'pki/issued/{0}.crt'.format(name)
         sans = get_sans()
         # Do not regenerate the server certificate if it already exists.
         if not os.path.isfile(server_file):
             # Create a server certificate for the server based on the CN.
             server = './easyrsa --batch --req-cn={0} --subject-alt-name={1} ' \
-                     'build-server-full {2} nopass 2>&1'.format(cn, sans,
-                                                                path_name)
+                     'build-server-full {2} nopass 2>&1'.format(cn, sans, name)
             check_call(split(server))
             # Read the server certificate from the filesystem.
             with open(server_file, 'r') as fp:
@@ -252,12 +254,15 @@ def create_certificates():
             # The key name is also used to set the reactive state.
             set_cert('tls.server.certificate', server_cert)
 
-        client_file = 'pki/issued/client.crt'
+
+def create_client_certificate(name='client'):
+    '''Create the client certificate and client key.'''
+    with chdir('easy-rsa/easyrsa3'):
+        client_file = 'pki/issued/{0}.crt'.format(name)
         # Do not regenerate the client certificate if it already exists.
         if not os.path.isfile(client_file):
             # Create a client certificate and key.
-            client = './easyrsa --batch --req-cn={0} --subject-alt-name={1} ' \
-                     'build-client-full client nopass 2>&1'.format(cn, sans)
+            client = './easyrsa build-client-full {0} nopass 2>&1'.format(name)
             check_call(split(client))
             # Read the client certificate from the filesystem.
             with open(client_file, 'r') as fp:
