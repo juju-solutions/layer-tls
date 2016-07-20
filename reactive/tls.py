@@ -272,6 +272,7 @@ def create_client_certificate(name='client'):
                 client_cert = fp.read()
             # The key name is also used to set the reactive state.
             set_cert('tls.client.certificate', client_cert)
+            set_state('client certificate available')
 
 
 def install_ca(certificate_authority):
@@ -288,12 +289,18 @@ def install_ca(certificate_authority):
     set_state('tls.certificate.authority available')
 
 
-def get_sans(address_list=[]):
+def get_sans(address_list=None):
     '''Return a string suitable for the easy-rsa subjectAltNames. This method
-    will add a valid SANs string with the public IP, private IP, and hostname 
+    will add a valid SANs string with the public IP, private IP, and hostname
     of THIS system.'''
     # The unit_public_ip could be a FQDN or IP address depending on provider.
     public = hookenv.unit_public_ip()
+
+    # unitdata returns None if not found. Handle the occurrence of no
+    # addresses passed, and initialize to an empty array
+    if not address_list:
+        address_list = []
+
     if public not in address_list:
         address_list.append(public)
     # The unit_private_ip could be a FQDN or IP address depending on provider.
