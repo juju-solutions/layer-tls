@@ -1,1 +1,5 @@
 includes: ['layer:basic', 'interface:tls']
+repo: http://github.com/juju-solutions/layer-tls.git
+exclude:
+  - tests/10-deploy.py
+  - tests/tests.yaml
