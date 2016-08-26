@@ -24,12 +24,16 @@ from charmhelpers.core.hookenv import leader_get
 @when_not('easyrsa installed')
 def install():
     '''Install the easy-rsa software that is required for this layer.'''
-    if os.path.isdir('easy-rsa'):
-        shutil.rmtree('easy-rsa')
+    # Create an absolute path to easy-rsa that is not affected by cwd.
+    easy_rsa_directory = os.path.join(hookenv.charm_dir(), 'easy-rsa')
+    if os.path.isdir(easy_rsa_directory):
+        shutil.rmtree(easy_rsa_directory)
     git = 'git clone https://github.com/OpenVPN/easy-rsa.git'
     hookenv.log(git)
     check_call(split(git))
-    with chdir('easy-rsa/easyrsa3'):
+    # Create an absolute path to the easyrsa3 directory.
+    easyrsa3_directory = os.path.join(easy_rsa_directory, 'easyrsa3')
+    with chdir(easyrsa3_directory):
         check_call(split('./easyrsa --batch init-pki 2>&1'))
     set_state('easyrsa installed')
 
@@ -39,18 +43,20 @@ def install():
 def configure_easyrsa():
     ''' Transitional state, allowing other layer(s) to modify config before we
         proceed generating the certificates and working with PKI. '''
-
+    charm_dir = hookenv.charm_dir()
+    # Create an absolute path to the file which will not be impacted by cwd.
+    openssl_file = os.path.join(charm_dir, 'easy-rsa/easyrsa3/openssl-1.0.cnf')
     # Update EasyRSA configuration with the capacity to copy CSR Requested
     # Extensions through to the resulting certificate. This can be tricky,
     # and the implications are not fully clear on this.
-    with open('easy-rsa/easyrsa3/openssl-1.0.cnf', 'r') as f:
+    with open(openssl_file, 'r') as f:
         conf = f.readlines()
     # idempotency is a thing
     if 'copy_extensions = copy' not in conf:
         for idx, line in enumerate(conf):
             if '[ CA_default ]' in line:
                 conf.insert(idx + 1, "copy_extensions = copy")
-        with open('easy-rsa/easyrsa3/openssl-1.0.cnf', 'w+') as f:
+        with open(openssl_file, 'w+') as f:
             f.writelines(conf)
 
     set_state('easyrsa configured')
@@ -94,7 +100,10 @@ def create_csr(tls):
     '''Create a certificate signing request (CSR). Only the followers need to
     run this operation.'''
     if not is_leader():
-        with chdir('easy-rsa/easyrsa3'):
+        # Create an absolute path to easyrsa3 to change to that directory.
+        easyrsa3_dir = os.path.join(hookenv.charm_dir(), 'easy-rsa/easyrsa3')
+        # Use an absolute path for this context manager.
+        with chdir(easyrsa3_dir):
             # Must remove the path characters from the unit name.
             path_name = hookenv.local_unit().replace('/', '_')
             # The reqest will be named with unit_name.req
@@ -129,9 +138,12 @@ def import_sign(tls):
         hookenv.log('The leader needs to sign the csr requests.')
         # Get all the requests that are queued up to sign.
         csr_map = tls.get_csr_map()
+        # Create an absolute path to easyrsa3 to change to that directory.
+        easyrsa3_dir = os.path.join(hookenv.charm_dir(), 'easy-rsa/easyrsa3')
         # Iterate over the unit names related to CSRs.
         for unit_name, csr in csr_map.items():
-            with chdir('easy-rsa/easyrsa3'):
+            # Use an absolute path for this context manager.
+            with chdir(easyrsa3_dir):
                 temp_file = tempfile.NamedTemporaryFile(suffix='.csr')
                 with open(temp_file.name, 'w') as fp:
                     fp.write(csr)
@@ -179,7 +191,9 @@ def create_certificate_authority(certificate_authority=None):
     # followers are not special, do not generate a ca
     if not is_leader():
         return
-    with chdir('easy-rsa/easyrsa3'):
+    # Create an absolute path so current directory does not affect the result.
+    easyrsa3_dir = os.path.join(hookenv.charm_dir(), 'easy-rsa/easyrsa3')
+    with chdir(easyrsa3_dir):
         ca_file = 'pki/ca.crt'
         # Check if an old CA exists.
         if os.path.isfile(ca_file):
@@ -218,9 +232,14 @@ def add_client_authorization():
     else:
         hookenv.log('Configuring SSL PKI for clientAuth')
 
-    openssl_config = 'easy-rsa/easyrsa3/x509-types/server'
+    # Get the absolute path to the charm directory.
+    charm_dir = hookenv.charm_dir()
+    # Create the relative path to the server file.
+    server_file = 'easy-rsa/easyrsa3/x509-types/server'
+    # Use an absolute path so current directory does not affect the result.
+    openssl_config = os.path.join(charm_dir, server_file)
     hookenv.log('Updating {0}'.format(openssl_config))
-
+    # Read the file in.
     with open(openssl_config, 'r') as f:
         existing_template = f.readlines()
 
@@ -237,7 +256,9 @@ def create_server_certificate(name='server'):
     '''Create the server certificate and server key.'''
     # Use the public ip as the Common Name for the server certificate.
     cn = hookenv.unit_public_ip()
-    with chdir('easy-rsa/easyrsa3'):
+    # Create an absolute path so current directory does not affect the result.
+    easyrsa3_dir = os.path.join(hookenv.charm_dir(), 'easy-rsa/easyrsa3')
+    with chdir(easyrsa3_dir):
         server_file = 'pki/issued/{0}.crt'.format(name)
         # Get a list of extra sans from the unitdata kv module.
         extra_sans = unitdata.kv().get('extra_sans')
@@ -258,7 +279,9 @@ def create_server_certificate(name='server'):
 
 def create_client_certificate(name='client'):
     '''Create the client certificate and client key.'''
-    with chdir('easy-rsa/easyrsa3'):
+    # Create an absolute path so current directory does not affect the result.
+    easyrsa3_dir = os.path.join(hookenv.charm_dir(), 'easy-rsa/easyrsa3')
+    with chdir(easyrsa3_dir):
         client_file = 'pki/issued/{0}.crt'.format(name)
         # Do not regenerate the client certificate if it already exists.
         if not os.path.isfile(client_file):
