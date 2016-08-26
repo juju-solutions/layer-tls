@@ -24,8 +24,6 @@ from charmhelpers.core.hookenv import leader_get
 @when_not('easyrsa installed')
 def install():
     '''Install the easy-rsa software that is required for this layer.'''
-    apt = 'apt-get install -y git openssl'
-    check_call(split(apt))
     if os.path.isdir('easy-rsa'):
         shutil.rmtree('easy-rsa')
     git = 'git clone https://github.com/OpenVPN/easy-rsa.git'
