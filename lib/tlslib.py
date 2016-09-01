@@ -150,10 +150,7 @@ def ca(source, destination, user=None, group=None):
     if not source:
         # When source not specified use the default CA path.
         source = \
-            os.path.join(
-                charm_dir(),
-                '/usr/local/share/ca-certificates/{0}.crt'.format(
-                    service_name()))
+            '/usr/local/share/ca-certificates/{0}.crt'.format(service_name())
 
     # Copy the ca certificate to the destination directory.
     copy2(source, destination)
