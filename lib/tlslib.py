@@ -3,7 +3,7 @@ import os
 import pwd
 from shutil import copy2
 
-from charmhelpers.core import hookenv
+from charmhelpers.core.hookenv import charm_dir, service_name, local_unit
 from charmhelpers.core import unitdata
 
 
@@ -22,9 +22,12 @@ def server_cert(source, destination, user=None, group=None):
 
     if not source:
         # Must remove the path characters from the local unit name.
-        key_name = hookenv.local_unit().replace('/', '_')
+        key_name = local_unit().replace('/', '_')
         # The location of server certificate is easy-rsa/easyrsa3/pki/issued
-        source = 'easy-rsa/easyrsa3/pki/issued/{0}.crt'.format(key_name)
+        source = \
+            os.path.join(
+                charm_dir(),
+                'easy-rsa/easyrsa3/pki/issued/{0}.crt'.format(key_name))
 
     if os.path.isfile(source):
         # Copy the server certificate to the destination.
@@ -55,9 +58,12 @@ def server_key(source, destination, user=None, group=None):
 
     if not source:
         # Must remove the path characters from the local unit name.
-        key_name = hookenv.local_unit().replace('/', '_')
+        key_name = local_unit().replace('/', '_')
         # The location of server key is easy-rsa/easyrsa3/pki/private
-        source = 'easy-rsa/easyrsa3/pki/private/{0}.key'.format(key_name)
+        source = \
+            os.path.join(
+                charm_dir(),
+                'easy-rsa/easyrsa3/pki/private/{0}.key'.format(key_name))
 
     # Copy the key to the destination.
     copy2(source, destination)
@@ -82,7 +88,8 @@ def client_cert(source, destination, user=None, group=None):
 
     if not source:
         # When source not specified use the default client certificate path.
-        source = 'easy-rsa/easyrsa3/pki/issued/client.crt'
+        source = os.path.join(charm_dir(),
+                              'easy-rsa/easyrsa3/pki/issued/client.crt')
 
     # Check for the client certificate.
     if os.path.isfile(source):
@@ -115,7 +122,8 @@ def client_key(source, destination, user=None, group=None):
 
     if not source:
         # When source not specified use the default client key path.
-        source = 'easy-rsa/easyrsa3/pki/private/client.key'
+        source = os.path.join(charm_dir(),
+                              'easy-rsa/easyrsa3/pki/private/client.key')
 
     # Copy the key to the destination directory.
     copy2(source, destination)
@@ -141,8 +149,8 @@ def ca(source, destination, user=None, group=None):
 
     if not source:
         # When source not specified use the default CA path.
-        source = '/usr/local/share/ca-certificates/{0}.crt'.format(
-            hookenv.service_name())
+        source = \
+            '/usr/local/share/ca-certificates/{0}.crt'.format(service_name())
 
     # Copy the ca certificate to the destination directory.
     copy2(source, destination)
