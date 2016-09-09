@@ -69,9 +69,13 @@ def check_ca_status(force=False):
     if config.changed('root_certificate') or force:
         remove_state('certificate authority available')
         if is_leader():
-            root_cert = _decode(config.get('root_certificate'))
+            root_cert = config.get('root_certificate')
+            if root_cert:
+                decoded_cert = _decode(root_cert)
+            else:
+                decoded_cert = None
             hookenv.log('Leader is creating the certificate authority.')
-            certificate_authority = create_certificate_authority(root_cert)
+            certificate_authority = create_certificate_authority(decoded_cert)
             leader_set({'certificate_authority': certificate_authority})
             install_ca(certificate_authority)
             # The leader can create the server certificate based on CA.
