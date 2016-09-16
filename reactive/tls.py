@@ -19,18 +19,29 @@ from charmhelpers.core import unitdata
 from charmhelpers.core.hookenv import is_leader
 from charmhelpers.core.hookenv import leader_set
 from charmhelpers.core.hookenv import leader_get
+from charmhelpers.core.hookenv import resource_get
 
 
 @when_not('easyrsa installed')
 def install():
-    '''Install the easy-rsa software that is required for this layer.'''
+    '''Install the easy-rsa software that is used by this layer.'''
+    charm_dir = hookenv.charm_dir()
     # Create an absolute path to easy-rsa that is not affected by cwd.
-    easy_rsa_directory = os.path.join(hookenv.charm_dir(), 'easy-rsa')
+    easy_rsa_directory = os.path.join(charm_dir, 'easy-rsa')
     if os.path.isdir(easy_rsa_directory):
         shutil.rmtree(easy_rsa_directory)
-    git = 'git clone https://github.com/OpenVPN/easy-rsa.git'
-    hookenv.log(git)
-    check_call(split(git))
+    # Try to get the resource from Juju.
+    path = resource_get('easyrsa')
+    if path:
+        # Expand the archive in the charm directory creating an easy-rsa dir.
+        untar = 'tar -xvzf {0} -C {1}'.format(path, charm_dir)
+        check_call(split(untar))
+    else:
+        hookenv.log('Resource easyrsa unavailable.')
+        # TODO: Remove this git code completely after we trust resources.
+        git = 'git clone https://github.com/OpenVPN/easy-rsa.git'
+        hookenv.log(git)
+        check_call(split(git))
     # Create an absolute path to the easyrsa3 directory.
     easyrsa3_directory = os.path.join(easy_rsa_directory, 'easyrsa3')
     with chdir(easyrsa3_directory):

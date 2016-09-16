@@ -5,3 +5,10 @@ description: |
 peers:
    certificates:
      interface: tls
+resources:
+  easyrsa:
+    type: file
+    filename: easyrsa.tar.gz
+    description: |
+      An archive of the easyrsa software to sign and create certificates
+      available on Github at https://github.com/OpenVPN/easy-rsa
